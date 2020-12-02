@@ -6,12 +6,14 @@ Add nucleotides on both flanks to keep cognate motifs centered.
 
 import numpy as np
 from collections import defaultdict
-
+from tensorflow.keras.models import load_model
+from helper import get_kmer_score
 
 class Tree:
 
-    def __init__(self, root):
+    def __init__(self, root, model):
         self.root = root
+        self.model = model
         self.state_count_dictionary = defaultdict(dict)
         # The root node is a k-mer from a TF's cognate motif in cis-bp.
         # Initializing the root node.
@@ -85,7 +87,8 @@ class Tree:
         return status
 
     def get_score(self, kmer):
-        return 1
+        score_at_kmer = get_kmer_score(model=self.model, kmer=kmer)
+        return score_at_kmer
 
     def simulate_from_node(self, node):
         """
@@ -177,11 +180,11 @@ class Tree:
             if self.state_count_dictionary[child]['status'] == 'unvisited':
                 reward = self.simulate_from_node(child)
                 try:
-                    self.state_count_dictionary[child]['reward'] += 1
+                    self.state_count_dictionary[child]['reward'] += reward
                     self.state_count_dictionary[child]['visits'] += 1
                 except KeyError:
                     # record does not exist yey.
-                    self.state_count_dictionary[child]['reward'] = 1
+                    self.state_count_dictionary[child]['reward'] = reward
                     self.state_count_dictionary[child]['visits'] = 1
                 # set status to visited & parent to "node"
                 self.state_count_dictionary[child]['status'] = 'visited'
@@ -214,17 +217,22 @@ class Tree:
         return self.state_count_dictionary
 
 
-mc_tree = Tree(root='TAAT')
+model_curr = load_model('/Users/asheesh/Desktop/RNFs/CNN_vs_RNFs/cnn/foxa2.hdf5')
+mc_tree = Tree(root='A', model=model_curr)
 
 idx = 0
-while idx < 164:
+while idx < 5000:
     idx += 1
-    dictc = mc_tree.monte_carlo('TAAT')
+    dictc = mc_tree.monte_carlo('A')
 stats = mc_tree.return_state_dictionary()
-for keys in stats:
-    if keys == 'TAAT':
-        print(keys)
-        print(stats[keys])
+print(stats)
+for key in stats:
+    try:
+        score = stats[key]['reward']
+        if score > 0.1:
+            print(key)
+    except KeyError:
+        pass
 
 
 
