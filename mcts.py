@@ -3,21 +3,25 @@ Implement a Monte Carlo Tree Search in k-mer space.
 Use cis-bp cognate motifs to initialize the root node.
 Add nucleotides on both flanks to keep cognate motifs centered.
 """
-
+import json
 import numpy as np
 from collections import defaultdict
 from tensorflow.keras.models import load_model
-from helper import get_kmer_score
+from helper import get_kmer_score_in_ns
+from helper import construct_background_data
+from helper import KmerScores
+
 
 class Tree:
 
-    def __init__(self, root, model):
+    def __init__(self, root, model, background_data):
         self.root = root
         self.model = model
         self.state_count_dictionary = defaultdict(dict)
         # The root node is a k-mer from a TF's cognate motif in cis-bp.
         # Initializing the root node.
         self.state_count_dictionary[root]['reward'] = 0
+        self.background_data = background_data
 
     def get_node_children(self, node):
         """
@@ -87,8 +91,10 @@ class Tree:
         return status
 
     def get_score(self, kmer):
-        score_at_kmer = get_kmer_score(model=self.model, kmer=kmer)
-        return score_at_kmer
+        # score_at_kmer = get_kmer_score_in_ns(model=self.model, kmer=kmer)
+        kmer_score_class_inst = KmerScores(kmer=kmer, model=self.model,
+                                           background_list=self.background_data)
+        return kmer_score_class_inst.score_sequences()
 
     def simulate_from_node(self, node):
         """
@@ -194,7 +200,7 @@ class Tree:
                 break  # visit a single node at a time.
         return self.state_count_dictionary
 
-    def monte_carlo(self, node):
+    def monte_carlo(self, node, parent_node):
         child_list = self.get_node_children(node)
         expansion_status = self.check_complete_expansion_status(child_list)
         # note: expansion_status will be False if parent is not \
@@ -204,37 +210,53 @@ class Tree:
             self.state_count_dictionary[node]['visits'] += 1
         except KeyError:
             self.state_count_dictionary[node]['visits'] = 1
-        if expansion_status is False:
-            print("Node is not completely expanded")
-            self.randomly_expand_parent_node(node=node,
-                                             child_list=child_list)
+
+        # First, check that the parent is <=16 base pairs
+        # because we are only simulating out to 18 base pairs)
+        if len(node) > 16:
+            print("Reached play-out terminal state")
+            # Note: The k-mer is now 18 base pairs, and is a child of a 16 bp
+            # k-mer
+            reward = self.get_score(node)
+            self.state_count_dictionary[node]['parent'] = parent_node
+            try:
+                self.state_count_dictionary[node]['reward'] += reward
+            except KeyError:
+                self.state_count_dictionary[node]['reward'] = reward
+
         else:
-            print("Node is completely expanded")
-            child_node = self.select_child_node_ucb1(child_list, parent_node=node)
-            self.monte_carlo(child_node)
+            if expansion_status is False:
+                # print("Node is not completely expanded")
+                self.randomly_expand_parent_node(node=node,
+                                                 child_list=child_list)
+            else:
+                # print("Node is completely expanded")
+                child_node = self.select_child_node_ucb1(child_list, parent_node=node)
+                self.monte_carlo(child_node, parent_node=node)
 
     def return_state_dictionary(self):
-        return self.state_count_dictionary
+        return dict(self.state_count_dictionary)
 
 
 model_curr = load_model('/Users/asheesh/Desktop/RNFs/CNN_vs_RNFs/cnn/foxa2.hdf5')
-mc_tree = Tree(root='A', model=model_curr)
-
-idx = 0
-while idx < 5000:
-    idx += 1
-    dictc = mc_tree.monte_carlo('A')
-stats = mc_tree.return_state_dictionary()
-print(stats)
-for key in stats:
-    try:
-        score = stats[key]['reward']
-        if score > 0.1:
-            print(key)
-    except KeyError:
-        pass
+background_data = construct_background_data(size=10)
+mc_tree = Tree(root='TGTTT', model=model_curr, background_data=background_data)
 
 
+def run_mcts(num_of_iterations):
+    idx = 0
+    while idx < num_of_iterations:
+        idx += 1
+        mc_tree.monte_carlo('TGTTT', parent_node=None)
+
+    iter_result = mc_tree.return_state_dictionary()
+    outfile = 'mcts_out' + str(num_of_iterations) + '.json'
+    with open(outfile, 'w') as fp:
+        json.dump(iter_result, fp)
+
+
+for num_of_iters in [100, 500, 1000, 5000, 10000]:
+    run_mcts(num_of_iterations=num_of_iters)
 
 
 
