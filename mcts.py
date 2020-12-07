@@ -10,6 +10,7 @@ from tensorflow.keras.models import load_model
 from helper import get_kmer_score_in_ns
 from helper import construct_background_data
 from helper import KmerScores
+import sys
 
 
 class Tree:
@@ -23,7 +24,8 @@ class Tree:
         self.state_count_dictionary[root]['reward'] = 0
         self.background_data = background_data
 
-    def get_node_children(self, node):
+    @staticmethod
+    def get_node_children(node):
         """
         As input, this function receives a k-mer.
         It adds all possible 2 bp flanks to this k-mer, resulting in 4 ^ 2 = 16
@@ -201,7 +203,7 @@ class Tree:
         return self.state_count_dictionary
 
     def monte_carlo(self, node, parent_node):
-        child_list = self.get_node_children(node)
+        child_list = Tree.get_node_children(node)
         expansion_status = self.check_complete_expansion_status(child_list)
         # note: expansion_status will be False if parent is not \
         # completely expanded
@@ -238,16 +240,11 @@ class Tree:
         return dict(self.state_count_dictionary)
 
 
-model_curr = load_model('/Users/asheesh/Desktop/RNFs/CNN_vs_RNFs/cnn/foxa2.hdf5')
-background_data = construct_background_data(size=10)
-mc_tree = Tree(root='TGTTT', model=model_curr, background_data=background_data)
-
-
-def run_mcts(num_of_iterations):
+def run_mcts(num_of_iterations, root_kmer):
     idx = 0
     while idx < num_of_iterations:
         idx += 1
-        mc_tree.monte_carlo('TGTTT', parent_node=None)
+        mc_tree.monte_carlo(root_kmer, parent_node=None)
 
     iter_result = mc_tree.return_state_dictionary()
     outfile = 'mcts_out' + str(num_of_iterations) + '.json'
@@ -255,8 +252,18 @@ def run_mcts(num_of_iterations):
         json.dump(iter_result, fp)
 
 
-for num_of_iters in [100, 500, 1000, 5000, 10000]:
-    run_mcts(num_of_iterations=num_of_iters)
+if __name__ == "__main__":
+
+    model_path = sys.argv[1]
+    root_kmer = sys.argv[2]
+
+    model = load_model(model_path)
+    background_data = construct_background_data(size=10)
+    mc_tree = Tree(root=root_kmer, model=model,
+                   background_data=background_data)
+
+    for num_of_iters in [1000, 5000, 10000, 50000, 100000]:
+        run_mcts(num_of_iterations=num_of_iters, root_kmer=root_kmer)
 
 
 
