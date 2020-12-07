@@ -240,14 +240,14 @@ class Tree:
         return dict(self.state_count_dictionary)
 
 
-def run_mcts(num_of_iterations, root_kmer):
+def run_mcts(num_of_iterations, root_kmer, outfile_prefix):
     idx = 0
     while idx < num_of_iterations:
         idx += 1
         mc_tree.monte_carlo(root_kmer, parent_node=None)
 
     iter_result = mc_tree.return_state_dictionary()
-    outfile = 'mcts_out' + str(num_of_iterations) + '.json'
+    outfile = outfile_prefix + str(num_of_iterations) + '.json'
     with open(outfile, 'w') as fp:
         json.dump(iter_result, fp)
 
@@ -256,6 +256,7 @@ if __name__ == "__main__":
 
     model_path = sys.argv[1]
     root_kmer = sys.argv[2]
+    out = sys.argv[3]
 
     model = load_model(model_path)
     background_data = construct_background_data(size=10)
@@ -263,7 +264,8 @@ if __name__ == "__main__":
                    background_data=background_data)
 
     for num_of_iters in [1000, 5000, 10000, 50000, 100000]:
-        run_mcts(num_of_iterations=num_of_iters, root_kmer=root_kmer)
+        run_mcts(num_of_iterations=num_of_iters, root_kmer=root_kmer,
+                 outfile_prefix=out)
 
 
 
