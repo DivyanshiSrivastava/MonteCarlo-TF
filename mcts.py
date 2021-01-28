@@ -118,11 +118,11 @@ class Tree:
         # TAATTAATTAA 30
         # For an invalid query:
         # Invalid mer 'TAAT'
-        if jf_query_stdout.split(' ')[0] is 'Invalid':
+        if jf_query_stdout.strip().split()[0] is 'Invalid':
             count = 0
             print('In this weird place FYI')
         else:
-            count = jf_query_stdout.split(' ')[1]
+            count = jf_query_stdout.strip().split()[1]
         return count / self.no_of_bound_seqs
 
     def simulate_from_node(self, node):
