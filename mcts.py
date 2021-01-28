@@ -311,6 +311,8 @@ def construct_kmer_indexes(bound_tf_fa_file, index_prefix):
     # use jellyfish to define the 9-mer, 11-mer, 13-mer, 15-mer \
     # and 17-mer indexes
     for K in [9, 11, 13, 15, 17]:
+        str_name = index_prefix + '.' + str(K) + '.txt'
+        print(str_name)
         subprocess.Popen(['jellyfish', 'count', '-m',
                           K, '-s', '1M', '-t', '10',
                           '-C', bound_tf_fa_file,
