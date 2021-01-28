@@ -111,7 +111,8 @@ class Tree:
             ['jellyfish', 'query', index_file_name, kmer],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT)
-        jf_query_stdout, stderr = jf_query
+        jf_query_stdout, stderr = jf_query.communicate()
+        print(jf_query_stdout)
         # jf_query_stdout is of the following form:
         # For a valid query:
         # TAATTAATTAA 30
@@ -314,7 +315,7 @@ def construct_kmer_indexes(bound_tf_fa_file, index_prefix):
         str_name = index_prefix + '.' + str(K) + '.txt'
         print(str_name)
         subprocess.Popen(['jellyfish', 'count', '-m',
-                          K, '-s', '1M', '-t', '10',
+                          str(K), '-s', '1M', '-t', '10',
                           '-C', bound_tf_fa_file,
                           '-o', index_prefix + '.' + str(K) + '.txt'])
 
