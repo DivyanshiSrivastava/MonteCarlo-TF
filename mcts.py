@@ -122,7 +122,8 @@ class Tree:
             count = 0
             print('In this weird place FYI')
         else:
-            count = jf_query_stdout.strip().split()[1]
+            count = int(jf_query_stdout.strip().split()[1])
+            print(count)
         return count / self.no_of_bound_seqs
 
     def simulate_from_node(self, node):
