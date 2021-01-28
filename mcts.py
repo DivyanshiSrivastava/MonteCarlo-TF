@@ -11,11 +11,12 @@ from helper import get_kmer_score_in_ns
 from helper import construct_background_data
 from helper import KmerScores
 import sys
+import subprocess
 
 
 class Tree:
 
-    def __init__(self, root, model, background_data):
+    def __init__(self, root, model, background_data, index_prefix, no_of_bound_seqs):
         self.root = root
         self.model = model
         self.state_count_dictionary = defaultdict(dict)
@@ -23,6 +24,9 @@ class Tree:
         # Initializing the root node.
         self.state_count_dictionary[root]['reward'] = 0
         self.background_data = background_data
+        self.index_prefix = index_prefix
+        self.no_of_bound_seqs = no_of_bound_seqs
+
 
     @staticmethod
     def get_node_children(node):
@@ -98,6 +102,28 @@ class Tree:
                                            background_list=self.background_data)
         return kmer_score_class_inst.score_sequences()
 
+    def get_kmer_frequencies_in_seqs(self, kmer):
+        # Here, we should have index_prefix k-mer indexes for kmer
+        # lengths = 9, 11, 13, 15, 17, (19?).
+        kmer_size = len(kmer)
+        index_file_name = self.index_prefix + '.' + str(kmer_size) + '.txt'
+        jf_query = subprocess.Popen(
+            ['jellyfish', 'query', index_file_name, kmer],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT)
+        jf_query_stdout, stderr = jf_query
+        # jf_query_stdout is of the following form:
+        # For a valid query:
+        # TAATTAATTAA 30
+        # For an invalid query:
+        # Invalid mer 'TAAT'
+        if jf_query_stdout.split(' ')[0] is 'Invalid':
+            count = 0
+            print('In this weird place FYI')
+        else:
+            count = jf_query_stdout.split(' ')[1]
+        return count / self.no_of_bound_seqs
+
     def simulate_from_node(self, node):
         """
         Simulates the play-out from a node.
@@ -116,11 +142,44 @@ class Tree:
         base_kmer = node
         potential_flanks = ['AA', 'AC', 'AG', 'AT', 'CA', 'CC', 'CG', 'CT',
                             'GA', 'GC', 'GG', 'GT', 'TA', 'TC', 'TG', 'TT']
-        while len(base_kmer) <= 18:
-            # select a kmer to add:
+
+        # Wednesday, January 27th: Modifying the stopping criteria.
+        # Old stopping criteria: Reaching a k-mer length of 18.
+        # while len(base_kmer) <= 18:
+        #     # select a kmer to add:
+        #     select = np.random.randint(low=0, high=15)
+        #     base_kmer = potential_flanks[select][0] + base_kmer + \
+        #                 potential_flanks[select][1]
+        # return self.get_score(base_kmer)
+
+        # New stopping criteria:
+        # Number of Peaks: Total number of TF ChIP-seq peaks.
+        # Threshold: The minimum number of times we should see the motif in \
+        # the input data.
+        # For example:
+        # Number of ChIP-seq peaks N = 5000.
+        # Threshold T = 0.01 (or 1%)
+        # Stopping criteria:
+        # Let M = 7 be expected length of k-mers. (Use a metric to choose M?)
+        # Alternatively, use the size of the cognate motif?
+        # When len(base K-mer) > M,
+        # Query a pre-built index.
+        # If base k-mer occurs at-least T * N times:
+        # continue.
+        # Else:
+        # Compute Score and Return Score.
+        m = 7
+        while len(base_kmer) <= m:
             select = np.random.randint(low=0, high=15)
             base_kmer = potential_flanks[select][0] + base_kmer + \
                         potential_flanks[select][1]
+
+        while self.get_kmer_frequencies_in_seqs(kmer=base_kmer) >= 0.05:
+            select = np.random.randint(low=0, high=15)
+            base_kmer = potential_flanks[select][0] + base_kmer + \
+                        potential_flanks[select][1]
+
+        # NUANCE NEEDED HERE?
         return self.get_score(base_kmer)
 
     def back_propagate_reward(self, node, reward):
@@ -166,9 +225,6 @@ class Tree:
 
         ucb1_score_list = self.compute_ucb1_scores(child_list=child_list,
                                                    parent_node=parent_node)
-        if parent_node == 'TAAT':
-            print("ucbscores")
-            print(ucb1_score_list)
         index_at_max_score = np.argmax(ucb1_score_list)
         selected_kmer = child_list[index_at_max_score]
         return selected_kmer
@@ -215,10 +271,21 @@ class Tree:
 
         # First, check that the parent is <=16 base pairs
         # because we are only simulating out to 18 base pairs)
-        if len(node) > 16:
+        # if len(node) > 16:
+        #     print("Reached play-out terminal state")
+        #     # Note: The k-mer is now 18 base pairs, and is a child of a 16 bp
+        #     # k-mer
+        #     reward = self.get_score(node)
+        #     self.state_count_dictionary[node]['parent'] = parent_node
+        #     try:
+        #         self.state_count_dictionary[node]['reward'] += reward
+        #     except KeyError:
+        #         self.state_count_dictionary[node]['reward'] = reward
+
+        # END of playout is reached when we reach a kmer with frequency less
+        # than 5%.
+        if self.get_kmer_frequencies_in_seqs(node) < 0.05:
             print("Reached play-out terminal state")
-            # Note: The k-mer is now 18 base pairs, and is a child of a 16 bp
-            # k-mer
             reward = self.get_score(node)
             self.state_count_dictionary[node]['parent'] = parent_node
             try:
@@ -240,6 +307,16 @@ class Tree:
         return dict(self.state_count_dictionary)
 
 
+def construct_kmer_indexes(bound_tf_fa_file, index_prefix):
+    # use jellyfish to define the 9-mer, 11-mer, 13-mer, 15-mer \
+    # and 17-mer indexes
+    for K in [9, 11, 13, 15, 17]:
+        subprocess.Popen(['jellyfish', 'count', '-m',
+                          K, '-s', '1M', '-t', '10',
+                          '-C', bound_tf_fa_file,
+                          '-o', index_prefix + '.' + str(K) + '.txt'])
+
+
 def run_mcts(num_of_iterations, root_kmer, outfile_prefix):
     idx = 0
     while idx < num_of_iterations:
@@ -257,46 +334,22 @@ if __name__ == "__main__":
     model_path = sys.argv[1]
     root_kmer = sys.argv[2]
     out = sys.argv[3]
+    input_bound_seqs_file = sys.argv[4]
 
     model = load_model(model_path)
     background_data = construct_background_data(size=10)
+
+    input_bound_seq_fa = np.loadtxt(input_bound_seqs_file, dtype=str)
+    no_of_input_seqs = len(input_bound_seq_fa) / 2
+
+    # construct K-mer indexes:
+    construct_kmer_indexes(bound_tf_fa_file=input_bound_seqs_file,
+                           index_prefix='kmer_indices')
+
     mc_tree = Tree(root=root_kmer, model=model,
-                   background_data=background_data)
+                   background_data=background_data, index_prefix='kmer_indices',
+                   no_of_bound_seqs=no_of_input_seqs)
 
     for num_of_iters in [1000, 5000, 10000, 50000, 100000]:
         run_mcts(num_of_iterations=num_of_iters, root_kmer=root_kmer,
                  outfile_prefix=out)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
