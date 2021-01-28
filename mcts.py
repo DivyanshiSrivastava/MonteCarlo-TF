@@ -285,14 +285,17 @@ class Tree:
 
         # END of playout is reached when we reach a kmer with frequency less
         # than 5%.
-        if self.get_kmer_frequencies_in_seqs(node) < 0.05:
-            print("Reached play-out terminal state")
-            reward = self.get_score(node)
-            self.state_count_dictionary[node]['parent'] = parent_node
-            try:
-                self.state_count_dictionary[node]['reward'] += reward
-            except KeyError:
-                self.state_count_dictionary[node]['reward'] = reward
+        if len(node) > 7:
+            if self.get_kmer_frequencies_in_seqs(node) < 0.05:
+                print("Reached play-out terminal state")
+                reward = self.get_score(node)
+                self.state_count_dictionary[node]['parent'] = parent_node
+                try:
+                    self.state_count_dictionary[node]['reward'] += reward
+                except KeyError:
+                    self.state_count_dictionary[node]['reward'] = reward
+            else:
+                pass
 
         else:
             if expansion_status is False:
