@@ -5,6 +5,7 @@ import pandas as pd
 from collections import defaultdict
 from sklearn.cluster import AgglomerativeClustering
 from difflib import SequenceMatcher
+import clustering_utils
 
 
 def depth(kmer):
@@ -77,7 +78,7 @@ def compute_topo_distance_between_kmers(kmer1, kmer2, mc_tree):
 def compute_longest_common_substring(kmer1, kmer2, mc_tree):
     match = SequenceMatcher(None, kmer1, kmer2).find_longest_match(0, len(
         kmer1), 0, len(kmer2))
-    return match.size
+    return (len(kmer1) + len(kmer2))/2 - match.size
 
 
 def compute_distance_matrix(top_kmer_df, kmer_tree_dict, dist_fn):
@@ -99,7 +100,6 @@ def compute_distance_matrix(top_kmer_df, kmer_tree_dict, dist_fn):
             distance_matrix[counter_i, counter_j] = k_dist
             counter_j += 1
         counter_i += 1
-    print(distance_matrix)
     return distance_matrix
 
 
@@ -116,8 +116,10 @@ def main():
     dist_mat = compute_distance_matrix(top_kmer_df=top_kmers,
                                        kmer_tree_dict=data_dictionary,
                                        dist_fn=compute_longest_common_substring)
-
-
+    cluster_labels = clustering_utils.cluster(lcs_mat=dist_mat)
+    # Add cluster labels to the kmer data frame.
+    top_kmers['cluster_label'] = cluster_labels
+    clustering_utils.summarize_clusters(kmer_df=top_kmers)
 
 
 if __name__ == "__main__":
