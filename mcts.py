@@ -349,12 +349,14 @@ if __name__ == "__main__":
     input_bound_seq_fa = np.loadtxt(input_bound_seqs_file, dtype=str)
     no_of_input_seqs = len(input_bound_seq_fa) / 2
 
+    kmer_indexfiles_prefix = out + 'kmerindex'
+
     # construct K-mer indexes:
     construct_kmer_indexes(bound_tf_fa_file=input_bound_seqs_file,
-                           index_prefix='kmer_indices')
+                           index_prefix=kmer_indexfiles_prefix)
 
     mc_tree = Tree(root=root_kmer, model=model,
-                   background_data=background_data, index_prefix='kmer_indices',
+                   background_data=background_data, index_prefix=kmer_indexfiles_prefix,
                    no_of_bound_seqs=no_of_input_seqs)
 
     for num_of_iters in [1000, 5000, 10000, 50000, 100000]:
