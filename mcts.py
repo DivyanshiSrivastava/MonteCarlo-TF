@@ -315,13 +315,20 @@ class Tree:
 def construct_kmer_indexes(bound_tf_fa_file, index_prefix):
     # use jellyfish to define the 9-mer, 11-mer, 13-mer, 15-mer \
     # and 17-mer indexes
+
+    processes = []
+
     for K in [9, 11, 13, 15, 17]:
         str_name = index_prefix + '.' + str(K) + '.txt'
         print(str_name)
-        subprocess.Popen(['jellyfish', 'count', '-m',
-                          str(K), '-s', '1M', '-t', '10',
-                          '-C', bound_tf_fa_file,
-                          '-o', index_prefix + '.' + str(K) + '.txt'])
+        processes.append(subprocess.Popen(['jellyfish', 'count', '-m',
+                         str(K), '-s', '1M', '-t', '10',
+                         '-C', bound_tf_fa_file,
+                         '-o', index_prefix + '.' + str(K) + '.txt']))
+
+        for process in processes:
+            # wait for the processes to complete
+            process.communicate()
 
 
 def run_mcts(num_of_iterations, root_kmer, outfile_prefix):
